@@ -2,7 +2,6 @@ package com.example.altbeaconscanner;
 
 import java.util.Date;
 import java.util.Objects;
-import java.util.Random;
 
 public class ManufacturerData {
     Date registered;

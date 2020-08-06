@@ -18,13 +18,23 @@
         android:text="Stop scan" />
 
     <TextView
-        android:id="@+id/textView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="BLE packets in last 20 seconds:" />
+        android:text="Uber AltBeacons in last 20 seconds:" />
 
     <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler_view"
+        android:id="@+id/uber_alt_beacons_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        tools:listitem="@layout/list_item" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Bluetooth advertisement packets in last 20 seconds:" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/bluetooth_packets_list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:listitem="@layout/list_item" />

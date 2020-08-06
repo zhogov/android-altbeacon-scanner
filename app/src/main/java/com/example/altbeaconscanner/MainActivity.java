@@ -1,36 +1,30 @@
 package com.example.altbeaconscanner;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-
 import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
-import android.widget.Button;
 import android.widget.Toast;
+
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.uber.rxcentralble.Scanner;
 import com.uber.rxcentralble.core.CoreScannerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.Iterator;
 
 import io.reactivex.disposables.Disposable;
 
 public class MainActivity extends AppCompatActivity {
 
-    public static final int ENTRY_TTL = 20000;
     public static final int UBER_BLUETOOTH_MFG_ID = 0x0415;
 
     private Disposable scanning;
-    private ArrayList<ManufacturerData> dataset;
-    private BeaconsListAdapter adapter;
+    private BeaconsListAdapter allBluetoothPackets;
+    private BeaconsListAdapter uberAltBeacons;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,14 +44,8 @@ public class MainActivity extends AppCompatActivity {
             }
         }
 
-        RecyclerView recyclerView = (RecyclerView) this.findViewById(R.id.recycler_view);
-        // use a linear layout manager
-        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
-        recyclerView.setLayoutManager(layoutManager);
-
-        dataset = new ArrayList<>();
-        adapter = new BeaconsListAdapter(dataset);
-        recyclerView.setAdapter(adapter);
+        allBluetoothPackets = initRecyclerView(R.id.bluetooth_packets_list);
+        uberAltBeacons = initRecyclerView(R.id.uber_alt_beacons_list);
 
         this.findViewById(R.id.button_scan_start).setOnClickListener(view -> {
             if (scanning != null) {
@@ -71,14 +59,27 @@ public class MainActivity extends AppCompatActivity {
                     .scan()
                     .subscribe(
                             scanData -> {
-                                // Received some Bluetooth packet
+                                // Received some Bluetooth packet, show it on UI
+                                byte[] manufacturerCodeAndData = scanData.getParsedAdvertisement().getRawAdvertisement();
+                                allBluetoothPackets.newScannedItem(manufacturerCodeAndData);
 
-                                // Take only data placed in the beacon by Uber using Uber's manufacturer code
+                                // Check if packet is Uber's AltBeacon packet using Uber's manufacturer code and AltBeacon header
+                                // 1. Take only the data placed in the beacon by Uber using Uber's manufacturer code
                                 byte[] uberBeaconData = scanData.getParsedAdvertisement().getManufacturerData(UBER_BLUETOOTH_MFG_ID);
                                 if (uberBeaconData != null) {
-                                    // AltBeacon starts with 0xBEAC
-                                    if (uberBeaconData[0] == (byte)0xBE && uberBeaconData[1] == (byte)0xAC) {
-                                        updateDataSet(uberBeaconData);
+                                    // 2. AltBeacons start with 0xBEAC
+                                    if (uberBeaconData[0] == (byte) 0xBE && uberBeaconData[1] == (byte) 0xAC) {
+                                        uberAltBeacons.newScannedItem(uberBeaconData);
+                                        // Just parse the byte array, here is the AltBeacon format:
+                                        // https://stackoverflow.com/a/35869431/2424926
+                                        // Note: format there starts with "m:2-3=beac" because bytes 0 and 1 are for manufacturer code
+                                        // RxBLE strips the manufacturer code, so just subtract 2:
+                                        // m:0-1=BEAC - header
+                                        // i:2-17 - UUID
+                                        // i:18-19 - major
+                                        // i:20-21 - minor
+                                        // p:24-24 - power level in 1 meter from device
+                                        // d:25-25 - not used by us
                                     }
                                 }
                             },
@@ -88,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
                     );
 
         });
-        ((Button) this.findViewById(R.id.button_scan_stop)).setOnClickListener(view -> {
+        this.findViewById(R.id.button_scan_stop).setOnClickListener(view -> {
             if (scanning != null) {
                 scanning.dispose();
                 scanning = null;
@@ -97,30 +98,16 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void updateDataSet(byte[] beaconData) {
-        HashSet<ManufacturerData> set = new HashSet<>(dataset);
+    BeaconsListAdapter initRecyclerView(int id) {
+        RecyclerView recyclerView = this.findViewById(id);
+        // use a linear layout manager
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        recyclerView.setLayoutManager(layoutManager);
 
-        ManufacturerData newManufacturerData = new ManufacturerData(beaconData);
-        if (!dataset.contains(newManufacturerData)) {
-            Log.e("scan_data", "Detected new: " + newManufacturerData.hex);
-        }
+        ArrayList<ManufacturerData> dataset = new ArrayList<>();
+        BeaconsListAdapter adapter = new BeaconsListAdapter(dataset);
+        recyclerView.setAdapter(adapter);
 
-        // Remove old entries
-        Date secondAgo = new Date(new Date().getTime() - ENTRY_TTL);
-        for (Iterator<ManufacturerData> iterator = set.iterator(); iterator.hasNext(); ) {
-            ManufacturerData manufacturerData = iterator.next();
-            if (manufacturerData.registered.before(secondAgo)) {
-                iterator.remove();
-            }
-        }
-
-        set.remove(newManufacturerData);
-        set.add(newManufacturerData);
-
-        dataset.clear();
-        dataset.addAll(set);
-        Collections.sort(dataset, (i1, i2) -> i1.hex.compareTo(i2.hex));
-
-        adapter.notifyDataSetChanged();
+        return adapter;
     }
 }

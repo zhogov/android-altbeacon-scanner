@@ -1,5 +1,6 @@
 package com.example.altbeaconscanner;
 
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
@@ -7,10 +8,16 @@ import android.widget.TextView;
 
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 
 public class BeaconsListAdapter extends RecyclerView.Adapter<BeaconsListAdapter.MyViewHolder> {
-    private List<ManufacturerData> dataset;
+    public static final int ENTRY_TTL = 20000;
+
+    List<ManufacturerData> dataset;
 
     // Provide a reference to the views for each data item
     // Complex data items may need more than one view per item, and
@@ -51,5 +58,32 @@ public class BeaconsListAdapter extends RecyclerView.Adapter<BeaconsListAdapter.
     @Override
     public int getItemCount() {
         return dataset.size();
+    }
+
+    void newScannedItem(byte[] beaconData) {
+        HashSet<ManufacturerData> set = new HashSet<>(dataset);
+
+        ManufacturerData newManufacturerData = new ManufacturerData(beaconData);
+        if (!dataset.contains(newManufacturerData)) {
+            Log.e("scan_data", "Detected new: " + newManufacturerData.hex);
+        }
+
+        // Remove old entries
+        Date secondAgo = new Date(new Date().getTime() - ENTRY_TTL);
+        for (Iterator<ManufacturerData> iterator = set.iterator(); iterator.hasNext(); ) {
+            ManufacturerData manufacturerData = iterator.next();
+            if (manufacturerData.registered.before(secondAgo)) {
+                iterator.remove();
+            }
+        }
+
+        set.remove(newManufacturerData);
+        set.add(newManufacturerData);
+
+        dataset.clear();
+        dataset.addAll(set);
+        Collections.sort(dataset, (i1, i2) -> i1.hex.compareTo(i2.hex));
+
+        notifyDataSetChanged();
     }
 }
