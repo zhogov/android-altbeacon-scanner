@@ -26,6 +26,7 @@ import io.reactivex.disposables.Disposable;
 public class MainActivity extends AppCompatActivity {
 
     public static final int ENTRY_TTL = 20000;
+    public static final int UBER_BLUETOOTH_MFG_ID = 0x0415;
 
     private Disposable scanning;
     private ArrayList<ManufacturerData> dataset;
@@ -36,11 +37,16 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        final int PERMISSION_REQUEST_COARSE_LOCATION = 1;
+        // Example of proper permission request:
+        // https://altbeacon.github.io/android-beacon-library/requesting_permission.html
+        // I just request both FINE and COARSE location
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // Android M Permission check
+            if (this.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 1);
+            }
             if (this.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_COARSE_LOCATION);
+                requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 1);
             }
         }
 
@@ -53,7 +59,7 @@ public class MainActivity extends AppCompatActivity {
         adapter = new BeaconsListAdapter(dataset);
         recyclerView.setAdapter(adapter);
 
-        ((Button) this.findViewById(R.id.button_scan_start)).setOnClickListener(view -> {
+        this.findViewById(R.id.button_scan_start).setOnClickListener(view -> {
             if (scanning != null) {
                 Toast.makeText(this, "Already scanning", Toast.LENGTH_SHORT).show();
                 return;
@@ -67,11 +73,13 @@ public class MainActivity extends AppCompatActivity {
                             scanData -> {
                                 // Received some Bluetooth packet
 
-                                // Get data by EIR type. "manufacturer data" is FF
-                                // https://www.bluetooth.com/specifications/assigned-numbers/generic-access-profile/
-                                byte[] beaconData = scanData.getParsedAdvertisement().getEIRData(0xFF);
-                                if (beaconData != null) {
-                                    updateDataSet(beaconData);
+                                // Take only data placed in the beacon by Uber using Uber's manufacturer code
+                                byte[] uberBeaconData = scanData.getParsedAdvertisement().getManufacturerData(UBER_BLUETOOTH_MFG_ID);
+                                if (uberBeaconData != null) {
+                                    // AltBeacon starts with 0xBEAC
+                                    if (uberBeaconData[0] == (byte)0xBE && uberBeaconData[1] == (byte)0xAC) {
+                                        updateDataSet(uberBeaconData);
+                                    }
                                 }
                             },
                             ex -> {
